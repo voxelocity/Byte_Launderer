@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BYTE LAUNDERER ⟶ anything to anything</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Major+Mono+Display&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0a0a;
+    --ink:#e8ff3a;
+    --hot:#ff2e63;
+    --cool:#08d9d6;
+    --paper:#f5f0e1;
+    --grid: rgba(232,255,58,.07);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--ink);font-family:'JetBrains Mono',monospace;min-height:100vh;overflow-x:hidden}
+  body{
+    background-image:
+      linear-gradient(var(--grid) 1px,transparent 1px),
+      linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size: 40px 40px;
+    padding:40px 24px 80px;
+  }
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at 20% 10%, rgba(255,46,99,.18), transparent 50%),
+               radial-gradient(ellipse at 80% 90%, rgba(8,217,214,.12), transparent 50%);
+    z-index:0;
+  }
+  .wrap{position:relative;z-index:1;max-width:1100px;margin:0 auto}
+
+  header{
+    border:2px solid var(--ink);
+    padding:18px 22px;
+    display:flex;justify-content:space-between;align-items:center;
+    background:#000;
+    box-shadow: 8px 8px 0 var(--hot);
+    margin-bottom:40px;
+  }
+  .logo{font-family:'Major Mono Display',monospace;font-size:clamp(22px,3.4vw,38px);letter-spacing:.04em}
+  .logo b{color:var(--hot)}
+  .meta{font-size:11px;text-align:right;line-height:1.5;color:var(--paper)}
+  .meta span{color:var(--cool)}
+
+  h1.kicker{
+    font-family:'VT323',monospace;
+    font-size:clamp(40px,7vw,90px);
+    line-height:.95;
+    color:var(--paper);
+    margin:30px 0 6px;
+    letter-spacing:-.01em;
+  }
+  h1.kicker em{font-style:normal;color:var(--ink);background:#000;padding:0 12px}
+  .sub{font-size:13px;max-width:640px;color:#aaa;margin-bottom:36px;line-height:1.6}
+
+  /* Drop zone */
+  .drop{
+    border:3px dashed var(--ink);
+    padding:48px 24px;
+    text-align:center;
+    background:rgba(232,255,58,.03);
+    transition:background .15s, border-color .15s, box-shadow .15s, transform .15s;
+    cursor:pointer;
+    position:relative;
+    user-select:none;
+  }
+  .drop:hover{background:rgba(232,255,58,.06);border-color:var(--cool)}
+  .drop.over{background:rgba(255,46,99,.12);border-color:var(--hot);transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--cool)}
+  .drop.over *{pointer-events:none} /* prevent child dragleave flicker */
+  .drop .big{font-family:'VT323',monospace;font-size:42px;color:var(--paper);line-height:1;pointer-events:none}
+  .drop .small{font-size:12px;margin-top:8px;color:#888;pointer-events:none}
+  .drop .browse{
+    display:inline-block;margin-top:14px;
+    font-family:'JetBrains Mono',monospace;font-size:12px;
+    background:var(--ink);color:#000;padding:8px 18px;
+    border:2px solid var(--ink);font-weight:700;letter-spacing:.05em;
+    pointer-events:none; /* whole zone handles click */
+  }
+  .drop:hover .browse{background:var(--cool);border-color:var(--cool)}
+  #file{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+
+  /* Loaded info */
+  .info{
+    margin-top:24px;display:none;
+    border:2px solid var(--cool);padding:16px 20px;background:#000;
+    font-size:13px;
+  }
+  .info.show{display:block}
+  .info .row{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:4px 0;border-bottom:1px dotted #222}
+  .info .row:last-child{border:0}
+  .info .row span:first-child{color:#666}
+  .info .row span:last-child{color:var(--paper)}
+
+  /* Format grid */
+  .pick-label{
+    margin:40px 0 14px;font-family:'VT323',monospace;font-size:32px;color:var(--paper);
+    display:flex;align-items:center;gap:14px;
+  }
+  .pick-label::before{content:"02.";color:var(--hot)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+  .fmt{
+    border:2px solid #222;
+    padding:14px 12px;
+    background:#0f0f0f;
+    cursor:pointer;
+    transition:.15s;
+    position:relative;
+  }
+  .fmt:hover{border-color:var(--ink);background:#161616;transform:translateY(-2px)}
+  .fmt.sel{border-color:var(--hot);background:#1a0510;box-shadow:inset 0 0 0 1px var(--hot)}
+  .fmt .ext{font-family:'Major Mono Display',monospace;font-size:22px;color:var(--ink)}
+  .fmt.sel .ext{color:var(--hot)}
+  .fmt .desc{font-size:10px;color:#777;margin-top:4px;line-height:1.4;min-height:28px}
+  .fmt .tag{position:absolute;top:6px;right:6px;font-size:9px;color:var(--cool);letter-spacing:.1em}
+
+  /* Convert button */
+  .actions{margin-top:36px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  button.go{
+    font-family:'VT323',monospace;
+    font-size:34px;
+    background:var(--ink);color:#000;border:none;
+    padding:14px 36px;cursor:pointer;
+    box-shadow:6px 6px 0 var(--hot);
+    transition:.1s;
+    letter-spacing:.04em;
+  }
+  button.go:hover:not(:disabled){transform:translate(2px,2px);box-shadow:2px 2px 0 var(--hot)}
+  button.go:active:not(:disabled){transform:translate(6px,6px);box-shadow:0 0 0 var(--hot)}
+  button.go:disabled{background:#333;color:#666;box-shadow:6px 6px 0 #222;cursor:not-allowed}
+
+  .status{font-size:12px;color:#888;font-family:'JetBrains Mono',monospace}
+  .status b{color:var(--cool)}
+
+  /* Output */
+  .output{
+    margin-top:48px;display:none;
+    border:2px solid var(--hot);background:#0a0005;padding:24px;
+    box-shadow: -6px 6px 0 var(--ink);
+  }
+  .output.show{display:block}
+  .out-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+  .out-head h2{font-family:'Major Mono Display',monospace;font-size:22px;color:var(--hot)}
+  .out-head .id{font-size:11px;color:#666}
+  .preview{
+    border:1px dashed #444;padding:18px;background:#000;
+    min-height:120px;display:flex;align-items:center;justify-content:center;flex-direction:column;
+    gap:14px;
+  }
+  .preview img, .preview video{max-width:100%;max-height:380px;border:1px solid #333;image-rendering:pixelated}
+  .preview audio{width:100%;max-width:500px}
+  .preview .note{font-size:11px;color:#666;text-align:center}
+  .download{
+    margin-top:14px;display:inline-block;
+    background:var(--cool);color:#000;padding:10px 22px;
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+    text-decoration:none;border:2px solid var(--cool);
+    transition:.15s;
+  }
+  .download:hover{background:#000;color:var(--cool)}
+
+  /* Warning bar */
+  .warn{
+    margin-top:24px;font-size:11px;color:#666;line-height:1.6;
+    border-left:3px solid var(--hot);padding:8px 14px;background:rgba(255,46,99,.04)
+  }
+
+  footer{
+    margin-top:60px;font-size:10px;color:#444;text-align:center;letter-spacing:.15em;
+  }
+
+  /* scanline overlay for fun */
+  .scan{position:fixed;inset:0;pointer-events:none;z-index:2;opacity:.04;
+    background:repeating-linear-gradient(0deg, #fff 0, #fff 1px, transparent 1px, transparent 3px);}
+</style>
+</head>
+<body>
+<div class="scan"></div>
+<div class="wrap">
+
+  <header>
+    <div class="logo">byte<b>·</b>launderer</div>
+    <div class="meta">
+      RAW BYTE TRANSMUTATION ENGINE<br>
+      <span>v0.1</span> · NO SERVER · NO RULES
+    </div>
+  </header>
+
+  <h1 class="kicker">turn <em>anything</em><br>into <em>anything else</em></h1>
+  <p class="sub">drop a file. pick a target format. we paste a header on the raw bytes and call it a day. an image becomes audio that screeches. a pdf becomes a corrupt video. an mp3 becomes a glitched bitmap. everything runs in your browser — files never leave your machine.</p>
+
+  <div class="pick-label" style="margin-top:10px"><span style="color:var(--hot);margin-right:6px;font-family:'JetBrains Mono',monospace;font-size:14px">01.</span> drop file</div>
+
+  <div class="drop" id="drop" role="button" tabindex="0">
+    <input type="file" id="file">
+    <div class="big">[ drop file here ]</div>
+    <div class="small">any file, any size your ram can hold</div>
+    <div class="browse">+ BROWSE FILES</div>
+  </div>
+
+  <div class="info" id="info">
+    <div class="row"><span>filename</span><span id="i-name">—</span></div>
+    <div class="row"><span>size</span><span id="i-size">—</span></div>
+    <div class="row"><span>mime (browser guess)</span><span id="i-mime">—</span></div>
+    <div class="row"><span>first 16 bytes (hex)</span><span id="i-hex" style="font-size:11px">—</span></div>
+  </div>
+
+  <div class="pick-label">pick target format</div>
+  <div class="grid" id="grid"></div>
+
+  <div class="actions">
+    <button class="go" id="go" disabled>⟶ LAUNDER IT</button>
+    <div class="status" id="status">waiting for input...</div>
+  </div>
+
+  <div class="warn">
+    ⚠ this is a TOY. it does not transcode. it wraps raw bytes in a target-format header so most players will attempt to render them. results range from boring to deeply cursed. images-as-audio are loud — turn volume DOWN first.
+  </div>
+
+  <div class="output" id="output">
+    <div class="out-head">
+      <h2 id="o-title">// output</h2>
+      <div class="id" id="o-id"></div>
+    </div>
+    <div class="preview" id="preview"></div>
+  </div>
+
+  <footer>NO TELEMETRY · NO UPLOAD · CLIENT-SIDE BYTE SURGERY · MADE FOR FUN</footer>
+</div>
+
+<script>
+// ---------- Target formats ----------
+// Each format has: ext, label, build(bytes) -> Uint8Array | Promise<Uint8Array>, mime, preview type
+const FORMATS = [
+  {
+    ext:'jpg', label:'JPEG image', tag:'real', mime:'image/jpeg', preview:'image',
+    desc:'real jpeg encoded by the browser from bytes-as-pixels.',
+    build: bytes => encodeImage(bytes, 'image/jpeg', 0.85)
+  },
+  {
+    ext:'png', label:'PNG image', tag:'real', mime:'image/png', preview:'image',
+    desc:'real png encoded by the browser. lossless.',
+    build: bytes => encodeImage(bytes, 'image/png')
+  },
+  {
+    ext:'webp', label:'WebP image', tag:'real', mime:'image/webp', preview:'image',
+    desc:'real webp encoded by the browser.',
+    build: bytes => encodeImage(bytes, 'image/webp', 0.85)
+  },
+  {
+    ext:'mp4', label:'MP4 video', tag:'playable', mime:'video/mp4', preview:'video',
+    desc:'real encoded video. bytes painted as frames, recorded to mp4/webm.',
+    build: bytes => encodeVideo(bytes)
+  },
+  {
+    ext:'mp4-scan', label:'MP4 binary scan', tag:'with audio', mime:'video/mp4', preview:'video',
+    desc:'rawdata-style: bytes as RGB32 video frames + same bytes as 8-bit audio, synced.',
+    build: bytes => encodeBinaryScanVideo(bytes)
+  },
+  {
+    ext:'wav', label:'WAV audio', tag:'8-bit', mime:'audio/wav', preview:'audio',
+    desc:'reads raw bytes as unsigned 8-bit PCM. loud and chaotic.',
+    build: bytes => wrapWAV(bytes, 8000, 1, 8)
+  },
+  {
+    ext:'wav-hi', label:'WAV audio', tag:'44.1k', mime:'audio/wav', preview:'audio',
+    desc:'same but 44.1kHz stereo 16-bit. faster, weirder.',
+    build: bytes => wrapWAV(bytes, 44100, 2, 16)
+  },
+  {
+    ext:'bmp', label:'BMP image', tag:'24-bit', mime:'image/bmp', preview:'image',
+    desc:'paints bytes as a 24-bit bitmap. always renders.',
+    build: bytes => wrapBMP(bytes)
+  },
+  {
+    ext:'ppm', label:'PPM image', tag:'raw rgb', mime:'image/x-portable-pixmap', preview:'image',
+    desc:'netpbm format. opens in many viewers.',
+    build: bytes => wrapPPM(bytes)
+  },
+  {
+    ext:'gif', label:'GIF image', tag:'glitch', mime:'image/gif', preview:'image',
+    desc:'fake gif with bytes-as-pixels in a palette frame.',
+    build: bytes => wrapGIF(bytes)
+  },
+  {
+    ext:'svg', label:'SVG image', tag:'data', mime:'image/svg+xml', preview:'image',
+    desc:'embeds bytes as a base64 image inside an svg.',
+    build: bytes => wrapSVG(bytes)
+  },
+  {
+    ext:'txt', label:'Plain text', tag:'utf-8', mime:'text/plain', preview:'text',
+    desc:'just reinterprets bytes as text. mostly mojibake.',
+    build: bytes => bytes
+  },
+  {
+    ext:'html', label:'HTML page', tag:'cursed', mime:'text/html', preview:'iframe',
+    desc:'wraps the bytes in a webpage. opens in browser.',
+    build: bytes => wrapHTML(bytes)
+  },
+  {
+    ext:'json', label:'JSON array', tag:'bytes', mime:'application/json', preview:'text',
+    desc:'every byte as a number in a json array.',
+    build: bytes => wrapJSON(bytes)
+  },
+  {
+    ext:'exe', label:'EXE binary', tag:'inert', mime:'application/octet-stream', preview:'none',
+    desc:'fake PE header + your bytes. wont run, just looks like one.',
+    build: bytes => wrapEXE(bytes)
+  },
+  {
+    ext:'pdf', label:'PDF doc', tag:'cursed', mime:'application/pdf', preview:'iframe',
+    desc:'minimal pdf with bytes hex-dumped as text content.',
+    build: bytes => wrapPDF(bytes)
+  },
+  {
+    ext:'wasm', label:'WASM module', tag:'inert', mime:'application/wasm', preview:'none',
+    desc:'wasm magic header + your bytes. wont validate.',
+    build: bytes => prepend(bytes, [0x00,0x61,0x73,0x6d,0x01,0x00,0x00,0x00])
+  },
+  {
+    ext:'y4m', label:'Y4M video', tag:'raw yuv', mime:'video/x-y4m', preview:'video-link',
+    desc:'uncompressed yuv frames. bytes become Y/U/V planes. download & play in VLC.',
+    build: bytes => wrapY4M(bytes)
+  },
+  {
+    ext:'avi', label:'AVI video', tag:'raw frames', mime:'video/avi', preview:'video',
+    desc:'bytes painted as raw uncompressed AVI frames. flickers wildly.',
+    build: bytes => wrapAVI(bytes)
+  },
+  {
+    ext:'gif-anim', label:'GIF animated', tag:'flipbook', mime:'image/gif', preview:'image',
+    desc:'splits bytes across multiple frames. cursed flipbook.',
+    build: bytes => wrapAnimGIF(bytes)
+  },
+  {
+    ext:'mkv', label:'MKV video', tag:'inert', mime:'video/x-matroska', preview:'none',
+    desc:'matroska magic header + your bytes. wont play, looks like one.',
+    build: bytes => prepend(bytes, [0x1A,0x45,0xDF,0xA3,0x9F,0x42,0x86,0x81,0x01,0x42,0xF7,0x81,0x01,0x42,0xF2,0x81,0x04,0x42,0xF3,0x81,0x08,0x42,0x82,0x88,0x6D,0x61,0x74,0x72,0x6F,0x73,0x6B,0x61])
+  },
+];
+
+// ---------- Builders ----------
+
+function prepend(bytes, header){
+  const h = new Uint8Array(header);
+  const out = new Uint8Array(h.length + bytes.length);
+  out.set(h,0); out.set(bytes,h.length);
+  return out;
+}
+
+// WAV: PCM. We just reinterpret incoming bytes as samples.
+function wrapWAV(bytes, sampleRate, channels, bitsPerSample){
+  // Normalize bytes to required sample alignment
+  const bytesPerSample = bitsPerSample/8;
+  const align = bytesPerSample * channels;
+  let data = bytes;
+  if(data.length % align !== 0){
+    const pad = align - (data.length % align);
+    const padded = new Uint8Array(data.length + pad);
+    padded.set(data); data = padded;
+  }
+  // 8-bit PCM in WAV is UNSIGNED (centered at 128). 16-bit is SIGNED little-endian.
+  // We pass bytes through as-is — that's the whole joke. For 16-bit they read as signed shorts.
+  const dataSize = data.length;
+  const header = new ArrayBuffer(44);
+  const v = new DataView(header);
+  // RIFF
+  writeStr(v,0,'RIFF');
+  v.setUint32(4, 36 + dataSize, true);
+  writeStr(v,8,'WAVE');
+  writeStr(v,12,'fmt ');
+  v.setUint32(16, 16, true);          // chunk size
+  v.setUint16(20, 1, true);           // PCM
+  v.setUint16(22, channels, true);
+  v.setUint32(24, sampleRate, true);
+  v.setUint32(28, sampleRate*channels*bytesPerSample, true); // byte rate
+  v.setUint16(32, channels*bytesPerSample, true);            // block align
+  v.setUint16(34, bitsPerSample, true);
+  writeStr(v,36,'data');
+  v.setUint32(40, dataSize, true);
+  const out = new Uint8Array(44 + dataSize);
+  out.set(new Uint8Array(header),0);
+  out.set(data,44);
+  return out;
+}
+function writeStr(v,off,s){ for(let i=0;i<s.length;i++) v.setUint8(off+i, s.charCodeAt(i)); }
+
+// BMP: 24-bit, choose width/height so width*height*3 ≈ bytes.length
+function wrapBMP(bytes){
+  const pixels = Math.floor(bytes.length / 3);
+  let w = Math.max(1, Math.round(Math.sqrt(pixels * 1.6))); // mild aspect
+  if(w < 1) w = 1;
+  let h = Math.max(1, Math.floor(pixels / w));
+  // BMP rows are padded to multiples of 4 bytes
+  const rowSize = Math.ceil((w*3)/4)*4;
+  const pad = rowSize - w*3;
+  const pixelDataSize = rowSize * h;
+  const fileSize = 54 + pixelDataSize;
+
+  const out = new Uint8Array(fileSize);
+  const v = new DataView(out.buffer);
+  // BMP header
+  out[0]=0x42; out[1]=0x4D; // 'BM'
+  v.setUint32(2, fileSize, true);
+  v.setUint32(10, 54, true); // pixel data offset
+  // DIB header (BITMAPINFOHEADER, 40 bytes)
+  v.setUint32(14, 40, true);
+  v.setInt32(18, w, true);
+  v.setInt32(22, h, true);
+  v.setUint16(26, 1, true);
+  v.setUint16(28, 24, true); // bpp
+  v.setUint32(30, 0, true);  // BI_RGB
+  v.setUint32(34, pixelDataSize, true);
+  v.setInt32(38, 2835, true);
+  v.setInt32(42, 2835, true);
+  // Pixel data: fill row by row from bottom (BMP is bottom-up)
+  let src = 0;
+  for(let y=h-1;y>=0;y--){
+    const rowStart = 54 + y*rowSize;
+    for(let x=0;x<w;x++){
+      out[rowStart + x*3]     = bytes[src++] || 0;
+      out[rowStart + x*3 + 1] = bytes[src++] || 0;
+      out[rowStart + x*3 + 2] = bytes[src++] || 0;
+    }
+    // pad bytes already 0
+  }
+  return out;
+}
+
+// PPM (P6 binary)
+function wrapPPM(bytes){
+  const pixels = Math.floor(bytes.length/3);
+  let w = Math.max(1, Math.round(Math.sqrt(pixels * 1.6)));
+  let h = Math.max(1, Math.floor(pixels/w));
+  const used = w*h*3;
+  const head = `P6\n${w} ${h}\n255\n`;
+  const headBytes = new TextEncoder().encode(head);
+  const out = new Uint8Array(headBytes.length + used);
+  out.set(headBytes,0);
+  out.set(bytes.subarray(0,used), headBytes.length);
+  return out;
+}
+
+// GIF — make a real, tiny indexed-color gif using bytes as pixel indices.
+// Width/height capped because GIF dimensions are uint16.
+function wrapGIF(bytes){
+  let len = Math.min(bytes.length, 65000*100); // sanity cap
+  let w = Math.max(1, Math.min(2000, Math.round(Math.sqrt(len*1.6))));
+  let h = Math.max(1, Math.min(2000, Math.floor(len/w)));
+  const pixels = w*h;
+  // Build a 256-color grayscale palette
+  const palette = new Uint8Array(256*3);
+  for(let i=0;i<256;i++){ palette[i*3]=i; palette[i*3+1]=i; palette[i*3+2]=i; }
+  // Header
+  const parts = [];
+  parts.push(new TextEncoder().encode('GIF89a'));
+  const lsd = new Uint8Array(7);
+  const lv = new DataView(lsd.buffer);
+  lv.setUint16(0, w, true); lv.setUint16(2, h, true);
+  lsd[4] = 0xF7; // global color table flag + 256 colors
+  lsd[5] = 0; lsd[6] = 0;
+  parts.push(lsd);
+  parts.push(palette);
+  // Image descriptor
+  const id = new Uint8Array(10);
+  id[0] = 0x2C;
+  const idv = new DataView(id.buffer);
+  idv.setUint16(1,0,true); idv.setUint16(3,0,true);
+  idv.setUint16(5,w,true); idv.setUint16(7,h,true);
+  id[9] = 0;
+  parts.push(id);
+  // LZW minimum code size
+  parts.push(new Uint8Array([8]));
+  // Use uncompressed-friendly LZW: write data as sub-blocks using clear/data/eoi
+  // Simpler approach: emit raw codes for each byte plus clear codes to avoid building a dictionary.
+  // We'll write 9-bit codes with periodic clears, packed into bytes.
+  const pix = bytes.subarray(0, pixels);
+  const lzw = encodeGIFLZW(pix, 8);
+  // Sub-block packaging
+  for(let i=0;i<lzw.length;i+=255){
+    const chunk = lzw.subarray(i, Math.min(i+255, lzw.length));
+    parts.push(new Uint8Array([chunk.length]));
+    parts.push(chunk);
+  }
+  parts.push(new Uint8Array([0, 0x3B])); // block terminator + trailer
+  return concatBytes(parts);
+}
+// Minimal LZW for GIF: emit Clear, then literal codes, periodic Clear before dict overflow
+function encodeGIFLZW(pixels, minCodeSize){
+  const clear = 1 << minCodeSize;       // 256
+  const eoi   = clear + 1;              // 257
+  let codeSize = minCodeSize + 1;       // 9
+  let nextCode = eoi + 1;               // 258
+  const maxCode = 4095;
+  const bw = new BitWriter();
+  bw.write(clear, codeSize);
+  for(let i=0;i<pixels.length;i++){
+    bw.write(pixels[i], codeSize);
+    nextCode++;
+    if(nextCode > maxCode){ bw.write(clear, codeSize); nextCode = eoi + 1; }
+  }
+  bw.write(eoi, codeSize);
+  return bw.finish();
+}
+class BitWriter{
+  constructor(){ this.buf=[]; this.cur=0; this.nbits=0; }
+  write(val, bits){
+    this.cur |= (val & ((1<<bits)-1)) << this.nbits;
+    this.nbits += bits;
+    while(this.nbits >= 8){ this.buf.push(this.cur & 0xFF); this.cur >>>= 8; this.nbits -= 8; }
+  }
+  finish(){ if(this.nbits>0){ this.buf.push(this.cur & 0xFF); } return new Uint8Array(this.buf); }
+}
+
+// SVG with embedded base64
+function wrapSVG(bytes){
+  const b64 = bytesToBase64(bytes);
+  const svg = `<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="640" height="480" viewBox="0 0 640 480">
+  <rect width="100%" height="100%" fill="#000"/>
+  <text x="20" y="40" fill="#0f0" font-family="monospace" font-size="14">byte-launderer · embedded payload</text>
+  <text x="20" y="60" fill="#0a0" font-family="monospace" font-size="11">${bytes.length} bytes</text>
+  <image x="20" y="80" width="600" height="380" preserveAspectRatio="xMidYMid slice" xlink:href="data:application/octet-stream;base64,${b64}"/>
+</svg>`;
+  return new TextEncoder().encode(svg);
+}
+
+// HTML
+function wrapHTML(bytes){
+  const sample = Array.from(bytes.subarray(0, Math.min(bytes.length, 4096)))
+    .map(b => b.toString(16).padStart(2,'0')).join(' ');
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>laundered</title>
+<style>body{background:#000;color:#0f0;font-family:monospace;padding:24px;line-height:1.4}
+h1{color:#ff0}.hex{font-size:11px;word-break:break-all;color:#0a0}</style></head>
+<body><h1>// byte-launderer payload</h1>
+<p>this html file's body is generated from ${bytes.length} bytes of source.</p>
+<p>first 4kb as hex:</p><div class="hex">${sample}</div></body></html>`;
+  return new TextEncoder().encode(html);
+}
+
+// JSON
+function wrapJSON(bytes){
+  return new TextEncoder().encode('[' + Array.from(bytes).join(',') + ']');
+}
+
+// Minimal PE-ish header so file *looks* like an exe (won't run; inert).
+function wrapEXE(bytes){
+  // DOS MZ header
+  const header = new Uint8Array(128);
+  header[0]=0x4D; header[1]=0x5A;
+  // No real PE — just identifiable magic + bytes
+  const out = new Uint8Array(header.length + bytes.length);
+  out.set(header,0); out.set(bytes, header.length);
+  return out;
+}
+
+// PDF: minimal one-page doc with hex of bytes as text. Keeps it small.
+function wrapPDF(bytes){
+  const sample = Array.from(bytes.subarray(0, Math.min(bytes.length, 2000)))
+    .map(b => b.toString(16).padStart(2,'0')).join(' ');
+  // Build basic PDF
+  const lines = sample.match(/.{1,80}/g) || [sample];
+  let stream = 'BT /F1 8 Tf 36 760 Td 10 TL\n';
+  stream += '(byte-launderer payload \\(' + bytes.length + ' bytes\\)) Tj T*\n';
+  for(const line of lines.slice(0, 70)){
+    stream += '(' + line + ') Tj T*\n';
+  }
+  stream += 'ET';
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [];
+  for(let i=0;i<objects.length;i++){
+    offsets.push(pdf.length);
+    pdf += `${i+1} 0 obj\n${objects[i]}\nendobj\n`;
+  }
+  const xrefStart = pdf.length;
+  pdf += `xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;
+  for(const o of offsets) pdf += String(o).padStart(10,'0') + ' 00000 n \n';
+  pdf += `trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+  return new TextEncoder().encode(pdf);
+}
+
+// ---------- VIDEO BUILDERS ----------
+
+// Y4M: uncompressed YUV4MPEG2. Plays in VLC/ffplay.
+// Format: header line, then per-frame "FRAME\n" + Y plane + U plane + V plane (4:2:0).
+function wrapY4M(bytes){
+  // Aim for ~256x256 frames at 12fps. Each 4:2:0 frame = W*H*1.5 bytes.
+  const W = 256, H = 256;
+  const frameBytes = W * H * 1.5;
+  const numFrames = Math.max(1, Math.floor(bytes.length / frameBytes));
+  const header = `YUV4MPEG2 W${W} H${H} F12:1 Ip A1:1 C420jpeg\n`;
+  const headerBuf = new TextEncoder().encode(header);
+  const frameMarker = new TextEncoder().encode('FRAME\n');
+  const totalSize = headerBuf.length + numFrames * (frameMarker.length + frameBytes);
+  const out = new Uint8Array(totalSize);
+  let off = 0;
+  out.set(headerBuf, off); off += headerBuf.length;
+  let src = 0;
+  for(let f = 0; f < numFrames; f++){
+    out.set(frameMarker, off); off += frameMarker.length;
+    // Y plane + U plane + V plane straight from source bytes
+    for(let i = 0; i < frameBytes; i++){
+      out[off++] = bytes[src++] || 0;
+    }
+  }
+  return out;
+}
+
+// AVI: uncompressed 24-bit BMP frames (DIB) packed into an AVI container.
+// Two-pass build: first concatenate all chunks into a list, then assemble.
+function wrapAVI(bytes){
+  const W = 160, H = 120;
+  const fps = 10;
+  const rowSize = Math.ceil((W*3)/4)*4;
+  const frameSize = rowSize * H;
+  const numFrames = Math.max(1, Math.min(600, Math.floor(bytes.length / frameSize)));
+
+  // Build frame pixel data
+  const frames = [];
+  let src = 0;
+  for(let f = 0; f < numFrames; f++){
+    const fr = new Uint8Array(frameSize);
+    for(let i = 0; i < frameSize; i++) fr[i] = bytes[src++] || 0;
+    frames.push(fr);
+  }
+
+  // Helpers to build chunks
+  const enc = s => { const a = new Uint8Array(s.length); for(let i=0;i<s.length;i++) a[i]=s.charCodeAt(i); return a; };
+  const u32 = n => { const a=new Uint8Array(4); new DataView(a.buffer).setUint32(0,n>>>0,true); return a; };
+  const u16 = n => { const a=new Uint8Array(2); new DataView(a.buffer).setUint16(0,n&0xFFFF,true); return a; };
+  const s32 = n => { const a=new Uint8Array(4); new DataView(a.buffer).setInt32(0,n|0,true); return a; };
+
+  // avih: 56 bytes
+  const avih = concatBytes([
+    u32(Math.round(1000000/fps)),  // dwMicroSecPerFrame
+    u32(W*H*3*fps),                // dwMaxBytesPerSec
+    u32(0),                        // dwPaddingGranularity
+    u32(0x10 | 0x20),              // dwFlags: HASINDEX | MUSTUSEINDEX
+    u32(numFrames),                // dwTotalFrames
+    u32(0),                        // dwInitialFrames
+    u32(1),                        // dwStreams
+    u32(frameSize),                // dwSuggestedBufferSize
+    u32(W), u32(H),
+    u32(0), u32(0), u32(0), u32(0) // reserved
+  ]);
+
+  // strh: 56 bytes
+  const strh = concatBytes([
+    enc('vids'),                   // fccType
+    enc('DIB '),                   // fccHandler (uncompressed)
+    u32(0),                        // dwFlags
+    u16(0),                        // wPriority
+    u16(0),                        // wLanguage
+    u32(0),                        // dwInitialFrames
+    u32(1),                        // dwScale
+    u32(fps),                      // dwRate
+    u32(0),                        // dwStart
+    u32(numFrames),                // dwLength
+    u32(frameSize),                // dwSuggestedBufferSize
+    u32(0xFFFFFFFF),               // dwQuality
+    u32(0),                        // dwSampleSize
+    u16(0), u16(0), u16(W), u16(H) // rcFrame
+  ]);
+
+  // strf: BITMAPINFOHEADER, 40 bytes
+  const strf = concatBytes([
+    u32(40),                       // biSize
+    s32(W),                        // biWidth
+    s32(-H),                       // biHeight (negative = top-down)
+    u16(1),                        // biPlanes
+    u16(24),                       // biBitCount
+    u32(0),                        // biCompression = BI_RGB
+    u32(frameSize),                // biSizeImage
+    s32(2835), s32(2835),          // pixels/meter
+    u32(0), u32(0)                 // colors used/important
+  ]);
+
+  // Chunk wrapper: 'name' + u32 size + data, with optional pad byte for odd
+  const chunk = (name, data) => {
+    const arr = [enc(name), u32(data.length), data];
+    if(data.length & 1) arr.push(new Uint8Array([0]));
+    return concatBytes(arr);
+  };
+  // LIST wrapper: 'LIST' + u32 size + type + contents (size includes type+contents)
+  const list = (type, contents) => {
+    const body = concatBytes([enc(type), contents]);
+    return concatBytes([enc('LIST'), u32(body.length), body]);
+  };
+
+  // hdrl LIST: avih chunk + strl LIST
+  const strlList = list('strl', concatBytes([
+    chunk('strh', strh),
+    chunk('strf', strf)
+  ]));
+  const hdrlList = list('hdrl', concatBytes([
+    chunk('avih', avih),
+    strlList
+  ]));
+
+  // movi LIST: '00db' chunks. Track frame offsets relative to start of movi data.
+  // Per AVI spec, idx1 offsets are relative to the start of the movi LIST's data
+  // section, which is right after the 'movi' fourcc.
+  const moviChunks = [];
+  const frameOffsets = []; // offset of each chunk start, relative to 'movi' fourcc position
+  // Chunk layout inside movi: starts right after the 'movi' fourcc (i.e. body offset 4)
+  let runningOffset = 4; // because contents start with 'movi' (4 bytes) then chunks
+  for(const fr of frames){
+    frameOffsets.push(runningOffset);
+    const c = chunk('00db', fr);
+    moviChunks.push(c);
+    runningOffset += c.length;
+  }
+  const moviList = list('movi', concatBytes(moviChunks));
+
+  // idx1: 16 bytes per entry: ckid(4) + flags(4) + offset(4) + size(4)
+  const idxEntries = [];
+  for(let i = 0; i < frames.length; i++){
+    idxEntries.push(concatBytes([
+      enc('00db'),
+      u32(0x10),           // AVIIF_KEYFRAME
+      u32(frameOffsets[i]),
+      u32(frames[i].length)
+    ]));
+  }
+  const idx1 = chunk('idx1', concatBytes(idxEntries));
+
+  // Assemble RIFF body: 'AVI ' + hdrlList + moviList + idx1
+  const riffBody = concatBytes([
+    enc('AVI '),
+    hdrlList,
+    moviList,
+    idx1
+  ]);
+  return concatBytes([enc('RIFF'), u32(riffBody.length), riffBody]);
+}
+
+// Animated GIF — split bytes into N frames, each frame uses next chunk of bytes as pixels.
+function wrapAnimGIF(bytes){
+  // Pick dimensions and frame count so we get a watchable animation
+  let totalPixels = bytes.length;
+  let numFrames = Math.max(2, Math.min(80, Math.floor(totalPixels / 4000)));
+  let pixelsPerFrame = Math.floor(totalPixels / numFrames);
+  if(pixelsPerFrame < 100){
+    numFrames = Math.max(2, Math.floor(totalPixels / 100));
+    pixelsPerFrame = Math.floor(totalPixels / numFrames);
+  }
+  let w = Math.max(1, Math.min(800, Math.round(Math.sqrt(pixelsPerFrame * 1.4))));
+  let h = Math.max(1, Math.min(800, Math.floor(pixelsPerFrame / w)));
+
+  const parts = [];
+  // Header + logical screen descriptor
+  parts.push(new TextEncoder().encode('GIF89a'));
+  const lsd = new Uint8Array(7);
+  const lv = new DataView(lsd.buffer);
+  lv.setUint16(0, w, true); lv.setUint16(2, h, true);
+  lsd[4] = 0xF7; lsd[5] = 0; lsd[6] = 0;
+  parts.push(lsd);
+  // Grayscale palette
+  const palette = new Uint8Array(256*3);
+  for(let i=0;i<256;i++){ palette[i*3]=i; palette[i*3+1]=i; palette[i*3+2]=i; }
+  parts.push(palette);
+
+  // Netscape looping extension (loop forever)
+  parts.push(new Uint8Array([
+    0x21, 0xFF, 0x0B,
+    0x4E,0x45,0x54,0x53,0x43,0x41,0x50,0x45,0x32,0x2E,0x30,
+    0x03, 0x01, 0x00, 0x00, 0x00
+  ]));
+
+  // Frames
+  const delay = 8; // 1/100 sec — fast-ish
+  for(let f = 0; f < numFrames; f++){
+    // GCE
+    const gce = new Uint8Array([0x21, 0xF9, 0x04, 0x00, delay & 0xFF, (delay>>8)&0xFF, 0x00, 0x00]);
+    parts.push(gce);
+    // Image descriptor
+    const id = new Uint8Array(10);
+    id[0] = 0x2C;
+    const idv = new DataView(id.buffer);
+    idv.setUint16(1, 0, true); idv.setUint16(3, 0, true);
+    idv.setUint16(5, w, true); idv.setUint16(7, h, true);
+    id[9] = 0;
+    parts.push(id);
+    parts.push(new Uint8Array([8])); // LZW min code size
+    const start = f * pixelsPerFrame;
+    const pix = bytes.subarray(start, start + w*h);
+    // Pad if short
+    let frameData = pix;
+    if(pix.length < w*h){
+      frameData = new Uint8Array(w*h);
+      frameData.set(pix);
+    }
+    const lzw = encodeGIFLZW(frameData, 8);
+    for(let i=0;i<lzw.length;i+=255){
+      const chunk = lzw.subarray(i, Math.min(i+255, lzw.length));
+      parts.push(new Uint8Array([chunk.length]));
+      parts.push(chunk);
+    }
+    parts.push(new Uint8Array([0])); // block terminator
+  }
+  parts.push(new Uint8Array([0x3B])); // trailer
+  return concatBytes(parts);
+}
+
+// ---------- REAL ENCODERS (use canvas/MediaRecorder) ----------
+
+// Paint raw bytes onto a canvas as RGBA pixels, sized to fit them all.
+// Returns the canvas.
+function bytesToCanvas(bytes, maxDim){
+  // 4 bytes per pixel (RGBA). Find dims fitting all bytes.
+  const totalPixels = Math.ceil(bytes.length / 4);
+  let w = Math.max(1, Math.round(Math.sqrt(totalPixels * 1.6)));
+  if(maxDim){ w = Math.min(w, maxDim); }
+  let h = Math.max(1, Math.ceil(totalPixels / w));
+  if(maxDim){ h = Math.min(h, maxDim); }
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.createImageData(w, h);
+  // Fill RGBA from bytes, force alpha = 255 so the image is opaque
+  for(let i = 0, p = 0; p < w*h; p++){
+    imageData.data[p*4]     = bytes[i++] || 0;
+    imageData.data[p*4 + 1] = bytes[i++] || 0;
+    imageData.data[p*4 + 2] = bytes[i++] || 0;
+    imageData.data[p*4 + 3] = 255;  // ignore the source alpha byte to avoid invisible pixels
+    i++; // skip the would-be alpha byte
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
+// Encode bytes-as-pixels into a real JPEG/PNG/WebP via canvas.
+function encodeImage(bytes, mime, quality){
+  return new Promise((resolve, reject) => {
+    try {
+      // Cap canvas dimension — browsers reject huge canvases. 8000 is conservative.
+      const canvas = bytesToCanvas(bytes, 8000);
+      canvas.toBlob(blob => {
+        if(!blob){ reject(new Error('encoding failed (browser returned null)')); return; }
+        blob.arrayBuffer().then(buf => resolve(new Uint8Array(buf))).catch(reject);
+      }, mime, quality);
+    } catch(err){ reject(err); }
+  });
+}
+
+// Encode bytes into a real, playable video using MediaRecorder on a canvas stream.
+// Strategy: split bytes into N frames, paint each onto a canvas in sequence,
+// MediaRecorder captures the canvas → produces webm or mp4 the browser can play.
+function encodeVideo(bytes){
+  return new Promise((resolve, reject) => {
+    // Pick the best supported mime — prefer mp4, fall back to webm
+    const candidates = [
+      'video/mp4;codecs=avc1.42E01E',
+      'video/mp4',
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm'
+    ];
+    let chosenMime = null;
+    for(const m of candidates){
+      if(typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)){
+        chosenMime = m; break;
+      }
+    }
+    if(!chosenMime){ reject(new Error('MediaRecorder not available in this browser')); return; }
+
+    // Frame dimensions — 320x240 is a sweet spot for visibility + speed
+    const W = 320, H = 240;
+    const pixelsPerFrame = W * H;
+    const bytesPerFrame = pixelsPerFrame * 4; // we'll consume 4 bytes per pixel (last = alpha override)
+    // Aim for 60-300 frames
+    let numFrames = Math.max(60, Math.min(300, Math.ceil(bytes.length / bytesPerFrame)));
+    // But don't have more frames than bytes/100 (keep frames distinct)
+    const maxByContent = Math.max(60, Math.floor(bytes.length / 1000));
+    numFrames = Math.min(numFrames, maxByContent);
+    if(bytes.length < 4000){ numFrames = Math.max(20, Math.floor(bytes.length / 50)); }
+
+    const stride = Math.max(1, Math.floor(bytes.length / numFrames));
+    const fps = 15;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    // Pre-build all frame ImageData objects so painting is fast
+    const frames = [];
+    for(let f = 0; f < numFrames; f++){
+      const img = ctx.createImageData(W, H);
+      const start = f * stride;
+      for(let p = 0; p < pixelsPerFrame; p++){
+        const b = start + p * 3; // 3 source bytes per pixel for variety
+        img.data[p*4]     = bytes[b % bytes.length] || 0;
+        img.data[p*4 + 1] = bytes[(b+1) % bytes.length] || 0;
+        img.data[p*4 + 2] = bytes[(b+2) % bytes.length] || 0;
+        img.data[p*4 + 3] = 255;
+      }
+      frames.push(img);
+    }
+
+    // Set up MediaRecorder on the canvas stream
+    let stream;
+    try { stream = canvas.captureStream(fps); }
+    catch(err){ reject(new Error('canvas.captureStream not supported')); return; }
+
+    const chunks = [];
+    let recorder;
+    try {
+      recorder = new MediaRecorder(stream, { mimeType: chosenMime, videoBitsPerSecond: 2_000_000 });
+    } catch(err){ reject(new Error('MediaRecorder init failed: ' + err.message)); return; }
+
+    recorder.ondataavailable = e => { if(e.data && e.data.size > 0) chunks.push(e.data); };
+    recorder.onerror = e => reject(new Error('recording error'));
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: chosenMime });
+      blob.arrayBuffer().then(buf => {
+        // Stash the actual mime on the function so caller can label it
+        encodeVideo._lastMime = chosenMime;
+        resolve(new Uint8Array(buf));
+      }).catch(reject);
+    };
+
+    // Paint frames at fps interval, then stop recorder
+    recorder.start();
+    let frameIdx = 0;
+    // Paint first frame immediately so the recorder has something
+    ctx.putImageData(frames[0], 0, 0);
+    frameIdx = 1;
+
+    const intervalMs = 1000 / fps;
+    const intervalId = setInterval(() => {
+      if(frameIdx >= frames.length){
+        clearInterval(intervalId);
+        // Small delay to let the last frame land in the stream
+        setTimeout(() => { try { recorder.stop(); } catch(e){} }, 100);
+        return;
+      }
+      ctx.putImageData(frames[frameIdx++], 0, 0);
+    }, intervalMs);
+  });
+}
+
+// Binary scan video: rawdata-style "raw file to video" conversion.
+// Modeled on ffmpeg's `-f rawvideo -pix_fmt rgb32` workflow used by rawdata.stormsurge:
+//   • Video: bytes are read sequentially and laid out into W×H frames as RGB32
+//     pixels (4 bytes each). Frame N uses bytes [N*W*H*4 .. (N+1)*W*H*4).
+//   • Audio: SAME bytes from offset 0, interpreted as unsigned 8-bit mono PCM.
+//   • Sync: audio is resampled so its duration matches the video duration exactly,
+//     so both streams end together regardless of file size.
+function encodeBinaryScanVideo(bytes){
+  return new Promise((resolve, reject) => {
+    if(typeof MediaRecorder === 'undefined'){
+      reject(new Error('MediaRecorder not available')); return;
+    }
+    if(typeof AudioContext === 'undefined' && typeof window.webkitAudioContext === 'undefined'){
+      reject(new Error('Web Audio API not available')); return;
+    }
+
+    // --- Frame dimensions ---
+    // Small grid (chunky pixels when scaled up). 32×24 RGB32 pixels = 3072 bytes/frame.
+    // Each pixel scales up to look like a fat block in the final video.
+    const SRC_W = 32;
+    const SRC_H = 24;
+    const SCALE = 16;                   // each source pixel renders as SCALE × SCALE
+    const W = SRC_W * SCALE;            // 512
+    const H = SRC_H * SCALE;            // 384
+    const bytesPerPixel = 4;            // RGB32 (R, G, B, A all from raw bytes)
+    const bytesPerFrame = SRC_W * SRC_H * bytesPerPixel;  // 3072
+
+    // --- Frame count & duration ---
+    // Cap duration between 4s (tiny files) and 30s (cap so encoding doesn't take forever).
+    // More bytes → more frames → longer video, up to the cap.
+    const fps = 15;
+    const naturalFrames = Math.ceil(bytes.length / bytesPerFrame);
+    const minFrames = fps * 4;          // at least 4 seconds
+    const maxFrames = fps * 30;         // at most 30 seconds
+    const numFrames = Math.max(minFrames, Math.min(naturalFrames, maxFrames));
+    const durationSec = numFrames / fps;
+
+    // If file is bigger than what fits in numFrames, stride through it so we still
+    // see the whole file. If smaller, repeat the last frame (handled in render).
+    const totalDisplayBytes = numFrames * bytesPerFrame;
+    const byteStride = Math.max(1, bytes.length / totalDisplayBytes);
+
+    // Pick MIME (prefer mp4 with AAC, fall back to webm/opus)
+    const candidates = [
+      'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+      'video/mp4',
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm'
+    ];
+    let chosenMime = null;
+    for(const m of candidates){
+      if(MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)){ chosenMime = m; break; }
+    }
+    if(!chosenMime){ reject(new Error('No supported MediaRecorder MIME')); return; }
+
+    // --- Set up canvas (small source → scaled-up display) ---
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.imageSmoothingEnabled = false;
+    const srcCanvas = document.createElement('canvas');
+    srcCanvas.width = SRC_W; srcCanvas.height = SRC_H;
+    const srcCtx = srcCanvas.getContext('2d', { alpha: false });
+    const srcImageData = srcCtx.createImageData(SRC_W, SRC_H);
+
+    // Paint a specific frame (no scrolling — direct grid mapping like ffmpeg rawvideo)
+    function paintFrame(frameIdx){
+      // Source byte offset for this frame. If file is large, use stride to span it.
+      const startByte = Math.floor(frameIdx * bytesPerFrame * byteStride);
+      const data = srcImageData.data;
+      for(let p = 0; p < SRC_W * SRC_H; p++){
+        const b = startByte + p * bytesPerPixel;
+        // RGB32: R, G, B, A all from raw bytes — but we force A=255 so frames are
+        // visible (otherwise random alpha bytes would make most pixels transparent).
+        data[p*4]     = bytes[b]     !== undefined ? bytes[b]     : 0;
+        data[p*4 + 1] = bytes[b + 1] !== undefined ? bytes[b + 1] : 0;
+        data[p*4 + 2] = bytes[b + 2] !== undefined ? bytes[b + 2] : 0;
+        data[p*4 + 3] = 255;
+      }
+      srcCtx.putImageData(srcImageData, 0, 0);
+      ctx.drawImage(srcCanvas, 0, 0, W, H);
+    }
+
+    paintFrame(0); // initial frame
+
+    // --- Audio: same bytes from offset 0, interpreted as unsigned 8-bit mono.
+    // Resample so audio plays through the whole file in exactly `durationSec`. ---
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new Ctx();
+    const audioDest = audioCtx.createMediaStreamDestination();
+    // We always want the entire file audible. Effective rate = bytes.length / durationSec.
+    // Convert by building an AudioBuffer at the audioCtx's native rate, doing the
+    // resampling ourselves via nearest-neighbor sampling.
+    const nativeRate = audioCtx.sampleRate;             // e.g. 44100 or 48000
+    const totalSamples = Math.floor(nativeRate * durationSec);
+    const audioBuffer = audioCtx.createBuffer(1, totalSamples, nativeRate);
+    const ch = audioBuffer.getChannelData(0);
+    for(let i = 0; i < totalSamples; i++){
+      // Map output sample i → input byte index (file pos progresses from 0 to bytes.length)
+      const srcIdx = Math.floor(i / totalSamples * bytes.length);
+      const b = bytes[srcIdx] || 0;
+      ch[i] = (b - 128) / 128.0;                        // unsigned 8-bit → float [-1, 1]
+    }
+    const gain = audioCtx.createGain();
+    gain.gain.value = 0.3;
+    const source = audioCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(gain).connect(audioDest);
+
+    // --- Combine video + audio streams ---
+    let videoStream;
+    try { videoStream = canvas.captureStream(fps); }
+    catch(err){ reject(new Error('captureStream not supported')); return; }
+    const combinedStream = new MediaStream();
+    videoStream.getVideoTracks().forEach(t => combinedStream.addTrack(t));
+    audioDest.stream.getAudioTracks().forEach(t => combinedStream.addTrack(t));
+
+    let recorder;
+    try {
+      recorder = new MediaRecorder(combinedStream, {
+        mimeType: chosenMime,
+        videoBitsPerSecond: 3_000_000,
+        audioBitsPerSecond: 128_000
+      });
+    } catch(err){ reject(new Error('MediaRecorder init failed: ' + err.message)); return; }
+
+    const chunks = [];
+    recorder.ondataavailable = e => { if(e.data && e.data.size > 0) chunks.push(e.data); };
+    recorder.onerror = () => reject(new Error('recording error'));
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: chosenMime });
+      blob.arrayBuffer().then(buf => {
+        encodeBinaryScanVideo._lastMime = chosenMime;
+        encodeVideo._lastMime = chosenMime;
+        resolve(new Uint8Array(buf));
+      }).catch(reject);
+    };
+
+    // --- Start everything in sync ---
+    recorder.start();
+    source.start();
+
+    let frame = 1;
+    const startTime = performance.now();
+    const frameIntervalMs = 1000 / fps;
+
+    function renderNext(){
+      if(frame >= numFrames){
+        setTimeout(() => {
+          try { source.stop(); } catch(e){}
+          try { recorder.stop(); } catch(e){}
+          try { audioCtx.close(); } catch(e){}
+        }, 200);
+        return;
+      }
+      paintFrame(frame);
+      frame++;
+      const target = startTime + frame * frameIntervalMs;
+      const delay = Math.max(0, target - performance.now());
+      setTimeout(renderNext, delay);
+    }
+    setTimeout(renderNext, frameIntervalMs);
+  });
+}
+
+// ---------- Helpers ----------
+function concatBytes(arrays){
+  let len = 0; for(const a of arrays) len += a.length;
+  const out = new Uint8Array(len); let off=0;
+  for(const a of arrays){ out.set(a, off); off += a.length; }
+  return out;
+}
+function bytesToBase64(bytes){
+  // Chunked to avoid call stack limits on huge files
+  let bin = '';
+  const chunk = 0x8000;
+  for(let i=0;i<bytes.length;i+=chunk){
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i+chunk));
+  }
+  return btoa(bin);
+}
+function fmtBytes(n){
+  if(n<1024) return n+' B';
+  if(n<1024*1024) return (n/1024).toFixed(1)+' KB';
+  if(n<1024*1024*1024) return (n/1024/1024).toFixed(2)+' MB';
+  return (n/1024/1024/1024).toFixed(2)+' GB';
+}
+
+// ---------- UI ----------
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('file');
+const info = document.getElementById('info');
+const grid = document.getElementById('grid');
+const go = document.getElementById('go');
+const statusEl = document.getElementById('status');
+const output = document.getElementById('output');
+const preview = document.getElementById('preview');
+
+let currentBytes = null;
+let currentFile = null;
+let selectedFmt = null;
+let lastURL = null;
+
+// Build format grid
+FORMATS.forEach((f, idx) => {
+  const el = document.createElement('div');
+  el.className = 'fmt';
+  el.innerHTML = `<div class="tag">${f.tag}</div>
+    <div class="ext">.${f.ext.split('-')[0]}</div>
+    <div class="desc">${f.desc}</div>`;
+  el.addEventListener('click', () => {
+    document.querySelectorAll('.fmt').forEach(e=>e.classList.remove('sel'));
+    el.classList.add('sel');
+    selectedFmt = f;
+    updateGo();
+  });
+  grid.appendChild(el);
+});
+
+// Drop handlers — use a counter to prevent flicker from child dragenter/leave
+let dragDepth = 0;
+drop.addEventListener('dragenter', e => {
+  e.preventDefault();
+  dragDepth++;
+  drop.classList.add('over');
+});
+drop.addEventListener('dragover', e => {
+  e.preventDefault();
+  if(e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+});
+drop.addEventListener('dragleave', e => {
+  e.preventDefault();
+  dragDepth = Math.max(0, dragDepth - 1);
+  if(dragDepth === 0) drop.classList.remove('over');
+});
+drop.addEventListener('drop', e => {
+  e.preventDefault();
+  dragDepth = 0;
+  drop.classList.remove('over');
+  if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]){
+    handleFile(e.dataTransfer.files[0]);
+  }
+});
+// Click anywhere in the drop zone opens picker
+drop.addEventListener('click', e => {
+  // Don't recurse when the click came from the input itself
+  if(e.target === fileInput) return;
+  fileInput.click();
+});
+// Keyboard accessibility
+drop.addEventListener('keydown', e => {
+  if(e.key === 'Enter' || e.key === ' '){
+    e.preventDefault();
+    fileInput.click();
+  }
+});
+fileInput.addEventListener('change', e => {
+  if(e.target.files && e.target.files[0]) handleFile(e.target.files[0]);
+  // Reset so re-selecting the same file re-fires change
+  e.target.value = '';
+});
+// Prevent the whole page from navigating away if a drop misses the zone
+['dragover','drop'].forEach(ev => {
+  window.addEventListener(ev, e => { if(e.target !== drop && !drop.contains(e.target)) e.preventDefault(); });
+});
+
+async function handleFile(file){
+  currentFile = file;
+  statusEl.innerHTML = 'reading <b>'+file.name+'</b>...';
+  const buf = await file.arrayBuffer();
+  currentBytes = new Uint8Array(buf);
+  document.getElementById('i-name').textContent = file.name;
+  document.getElementById('i-size').textContent = fmtBytes(currentBytes.length);
+  document.getElementById('i-mime').textContent = file.type || '(unknown)';
+  document.getElementById('i-hex').textContent = Array.from(currentBytes.subarray(0,16))
+    .map(b=>b.toString(16).padStart(2,'0')).join(' ');
+  info.classList.add('show');
+  statusEl.innerHTML = 'loaded. <b>'+fmtBytes(currentBytes.length)+'</b>. pick a target format.';
+  updateGo();
+}
+
+function updateGo(){
+  go.disabled = !(currentBytes && selectedFmt);
+  if(go.disabled) return;
+  statusEl.innerHTML = 'ready: convert <b>'+currentFile.name+'</b> → <b>.'+selectedFmt.ext.split('-')[0]+'</b>';
+}
+
+go.addEventListener('click', async () => {
+  if(!currentBytes || !selectedFmt) return;
+  go.disabled = true;
+  const isVideo = selectedFmt.ext === 'mp4' || selectedFmt.ext === 'mp4-scan';
+  if(selectedFmt.ext === 'mp4-scan'){
+    statusEl.innerHTML = '<b style="color:#ff2e63">scanning bytes... up to 60s of video to record in real time. dont navigate away.</b>';
+  } else if(isVideo){
+    statusEl.innerHTML = '<b style="color:#ff2e63">encoding video... this takes ~20 seconds. dont navigate away.</b>';
+  } else {
+    statusEl.innerHTML = '<b style="color:#ff2e63">laundering bytes...</b>';
+  }
+  output.classList.remove('show');
+  // Yield to UI so spinner-ish text renders
+  await new Promise(r => setTimeout(r, 50));
+  try {
+    // Builders may return Uint8Array or a Promise
+    let result = selectedFmt.build(currentBytes);
+    if(result && typeof result.then === 'function') result = await result;
+
+    // Some encoders (video via MediaRecorder) tell us the actual mime they produced
+    let actualMime = selectedFmt.mime;
+    let actualExt = selectedFmt.ext.split('-')[0];
+    let nameSuffix = '';
+    if((selectedFmt.ext === 'mp4' || selectedFmt.ext === 'mp4-scan') && encodeVideo._lastMime){
+      actualMime = encodeVideo._lastMime;
+      if(actualMime.includes('webm')) actualExt = 'webm';
+    }
+    if(selectedFmt.ext === 'mp4-scan') nameSuffix = '-scan';
+
+    const blob = new Blob([result], { type: actualMime });
+    if(lastURL) URL.revokeObjectURL(lastURL);
+    lastURL = URL.createObjectURL(blob);
+
+    const baseName = currentFile.name.replace(/\.[^.]+$/, '');
+    const newName = baseName + nameSuffix + '.' + actualExt;
+
+    preview.innerHTML = '';
+    const head = document.createElement('div');
+    head.className = 'note';
+    head.innerHTML = `<b style="color:#08d9d6">${newName}</b> · ${fmtBytes(result.length)} · ${actualMime}`;
+
+    let mediaEl;
+    if(selectedFmt.preview === 'audio'){
+      mediaEl = document.createElement('audio');
+      mediaEl.controls = true; mediaEl.src = lastURL;
+      const warn = document.createElement('div');
+      warn.className = 'note';
+      warn.style.color = '#ff2e63';
+      warn.textContent = '⚠ TURN VOLUME DOWN BEFORE PLAYING';
+      preview.appendChild(warn);
+    } else if(selectedFmt.preview === 'image'){
+      mediaEl = document.createElement('img');
+      mediaEl.src = lastURL;
+      mediaEl.onerror = () => { mediaEl.replaceWith(noteEl('image failed to render (browser rejected the bytes) — download still works')); };
+    } else if(selectedFmt.preview === 'video'){
+      mediaEl = document.createElement('video');
+      mediaEl.controls = true; mediaEl.loop = true; mediaEl.muted = true;
+      mediaEl.src = lastURL;
+      mediaEl.style.cssText = 'max-width:100%;max-height:400px;border:1px solid #333;background:#000;image-rendering:pixelated';
+      mediaEl.onerror = () => { mediaEl.replaceWith(noteEl('browser cant play this video. download and open in VLC.')); };
+    } else if(selectedFmt.preview === 'video-link'){
+      mediaEl = noteEl('Y4M is uncompressed — browsers wont play it inline. download and open in VLC or ffplay.');
+    } else if(selectedFmt.preview === 'iframe'){
+      mediaEl = document.createElement('iframe');
+      mediaEl.src = lastURL;
+      mediaEl.style.cssText = 'width:100%;height:380px;border:1px solid #333;background:#fff';
+    } else if(selectedFmt.preview === 'text'){
+      mediaEl = document.createElement('pre');
+      mediaEl.style.cssText = 'max-height:300px;overflow:auto;font-size:11px;color:#888;width:100%;text-align:left;white-space:pre-wrap;word-break:break-all';
+      const sample = new TextDecoder('utf-8', {fatal:false}).decode(result.subarray(0, Math.min(result.length, 4000)));
+      mediaEl.textContent = sample + (result.length > 4000 ? '\n\n... (truncated for preview, full file in download)' : '');
+    } else {
+      mediaEl = noteEl('no inline preview available for this format. download below.');
+    }
+
+    preview.appendChild(mediaEl);
+    preview.appendChild(head);
+
+    const dl = document.createElement('a');
+    dl.className = 'download';
+    dl.href = lastURL;
+    dl.download = newName;
+    dl.textContent = '↓ DOWNLOAD ' + newName.toUpperCase();
+    preview.appendChild(dl);
+
+    document.getElementById('o-title').textContent = '// '+currentFile.name+' ⟶ '+newName;
+    document.getElementById('o-id').textContent = '#' + Math.random().toString(36).slice(2,8).toUpperCase();
+    output.classList.add('show');
+    statusEl.innerHTML = '<b style="color:#08d9d6">done.</b> output ready below.';
+    output.scrollIntoView({behavior:'smooth', block:'start'});
+  } catch(err){
+    statusEl.innerHTML = '<b style="color:#ff2e63">error: '+err.message+'</b>';
+    console.error(err);
+  } finally {
+    go.disabled = false;
+  }
+});
+
+function noteEl(text){
+  const d = document.createElement('div');
+  d.className = 'note'; d.textContent = text; return d;
+}
+</script>
+</body>
+</html>
